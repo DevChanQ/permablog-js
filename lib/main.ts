@@ -15,6 +15,11 @@ import {
 const parseArticleFromEdge = async (edge: GraphQLEdge): Promise<Article | null> => {
   try {
     const { node } = edge
+
+    // Fetch the actual content from Arweave FIRST
+    const content = await fetchTransactionData(node.id)
+
+    // Then derive tags/metadata from the GraphQL edge
     const tags = node.tags.reduce(
       (acc, tag) => {
         acc[tag.name] = tag.value
@@ -22,9 +27,6 @@ const parseArticleFromEdge = async (edge: GraphQLEdge): Promise<Article | null> 
       },
       {} as Record<string, string>,
     )
-
-    // Fetch the actual content from Arweave
-    const content = await fetchTransactionData(node.id)
 
     return {
       id: node.id,
@@ -51,7 +53,7 @@ const createPermablog = (options: { key: string }): PermablogInstance => {
 
       const edges = response.data.transactions.edges
 
-      // Parse all articles in parallel
+      // For each edge, fetch content from arweave.net first, then apply tags/metadata
       const articlePromises = edges.map((edge) => parseArticleFromEdge(edge))
       const articles = await Promise.all(articlePromises)
 
@@ -67,16 +69,47 @@ const createPermablog = (options: { key: string }): PermablogInstance => {
 
   const fetchArticle = async (id: string): Promise<Article | null> => {
     try {
+      // Always fetch the content from arweave.net FIRST
+      const content = await fetchTransactionData(id)
+
+      // Then attempt to fetch the metadata/tags from GraphQL
       const query = buildArticleQuery(id)
       const response: GraphQLResponse = await executeGraphQL(query)
-
       const edges = response.data.transactions.edges
 
       if (edges.length === 0) {
-        return null
+        // GraphQL item may not exist yet; still return the article with content
+        return {
+          id,
+          title: 'Untitled',
+          content,
+          category: 'Uncategorized',
+          timestamp: Date.now(),
+          owner: '',
+          tags: [],
+        }
       }
 
-      return parseArticleFromEdge(edges[0])
+      // If we do have an edge, enrich using its metadata but keep the fetched content
+      const edge = edges[0]
+      const { node } = edge
+      const tags = node.tags.reduce(
+        (acc, tag) => {
+          acc[tag.name] = tag.value
+          return acc
+        },
+        {} as Record<string, string>,
+      )
+
+      return {
+        id: node.id,
+        title: tags['Article-Title'] || 'Untitled',
+        content,
+        category: tags['Article-Category'] || 'Uncategorized',
+        timestamp: node.block?.timestamp || Date.now(),
+        owner: node.owner.address,
+        tags: [],
+      }
     } catch (error) {
       console.error(`Failed to fetch article ${id}:`, error)
       throw new Error(

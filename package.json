@@ -27,6 +27,7 @@
   "version": "0.2.0",
   "type": "module",
   "files": [
+    "lib",
     "dist"
   ],
   "main": "./dist/main.min.js",

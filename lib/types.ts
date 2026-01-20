@@ -1,10 +1,18 @@
 export interface Article {
   id: string
+  slug: string
   title: string
+  image: string
+  description: string
   content: string
   category: string
   timestamp: number
   owner: string
+  meta: {
+    title?: string
+    description?: string
+    image?: string
+  }
   tags?: string[]
 }
 

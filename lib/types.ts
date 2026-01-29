@@ -3,6 +3,7 @@ export interface Article {
   slug: string
   title: string
   image: string
+  thumbnail?: string
   description: string
   content: string
   category: string
